@@ -1,39 +1,41 @@
 # -telegram-exchange-rate-bot
 
-В файле README.md вы можете включить следующую информацию о вашем проекте:
+У файлі README.md ви можете включити таку інформацію про ваш проект:
 markdownCopy code# Telegram Exchange Rate Bot
 
-Этот бот для Telegram позволяет получать текущий курс доллара США к украинской гривне из Google Finance и отправляет его пользователю в виде файла Excel.
+Цей бот для Telegram дає змогу отримувати поточний курс долара США до української гривні з Google Finance і відправляє його користувачеві у вигляді файлу Excel.
 
-## Требования
+## Вимоги
 
-- Python 3.6 или выше
-- Библиотеки: requests, beautifulsoup4, python-telegram-bot, openpyxl
+- Python 3.6 або вище
+- Бібліотеки: requests, beautifulsoup4, python-telegram-bot, openpyxl
 
-## Установка
+## Встановлення
 
-1. Клонируйте этот репозиторий:
+1. Клонуйте цей репозиторій:
 git clone https://github.com/your-username/telegram-exchange-rate-bot.git
 Copy code
-2. Создайте файл `.env` в корневой директории проекта и добавьте туда свой токен Telegram бота:
+2. Створіть файл `.env` у кореневій директорії проєкту і додайте туди свій токен Telegram бота:
 BOT_TOKEN=your_bot_token
 Copy code
-3. Установите необходимые библиотеки Python:
+3. Встановіть необхідні бібліотеки Python:
 pip install -r requirements.txt
 Copy code
-## Использование
+## Використання
 
-1. Запустите бота:
+1. Запустіть бота:
 python main.py
-Copy code
-2. В Telegram найдите своего бота и отправьте ему команду `/get_exchange_rate`.
+Скопіюйте код
+2. У Telegram знайдіть свого бота і надішліть йому команду `/get_exchange_rate`.
 
-3. Бот отправит вам файл Excel с текущим курсом доллара США к гривне.
+3 Бот надішле вам файл Excel із поточним курсом долара США до гривні.
 
-## Лицензия
+## Ліцензія
 
-Этот проект распространяется под лицензией [MIT](LICENSE).
+Цей проект поширюється під ліцензією [MIT](LICENSE).
 
 ## Contributing
 
-Пожалуйста, следуйте инструкциям в [CONTRIBUTING.md](CONTRIBUTING.md) для получения информации о процессе внесения изменений в этот проект.
+Будь ласка, дотримуйтесь інструкцій у [CONTRIBUTING.md](CONTRIBUTING.md) для отримання інформації щодо процесу внесення змін до цього проекту.
+
+Translated with DeepL.com (free version)
