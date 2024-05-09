@@ -62,9 +62,31 @@ def save_to_database(timestamp, rate):
     except Exception as e:
         logging.error(f"Сталася помилка: {e}")
 
+def parse_exchange_rate():
+    """
+    Функція для парсінгу курсу долара до гривні.
+    """
+    try:
+        response = requests.get(EXCHANGE_RATE_URL)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        exchange_rate_element = soup.select_one('div[data-reload-url="/search?q=USD+UAH"]')
+        if exchange_rate_element:
+            exchange_rate = exchange_rate_element.text.strip()
+
+            current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # Збереження даних у базі даних з новим часом
+            save_to_database(current_time, exchange_rate)
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Помилка при отриманні курсу: {e}")
+    except Exception as e:
+        logging.error(f"Сталася помилка: {e}")
+
 def send_exchange_rate(bot, chat_id):
     """
-    Функція для відправлення курсу користувачеві у форматі XLSX.
+    Функція для відправлення курсу користувачеві в форматі XLSX.
     """
     try:
         conn = sqlite3.connect('exchange_rates.db')
@@ -85,7 +107,11 @@ def send_exchange_rate(bot, chat_id):
             file_path = f'exchange_rate_{timestamp}.xlsx'
             workbook.save(file_path)
 
+            # Відправлення XLSX-файлу користувачеві
             bot.send_document(chat_id, open(file_path, 'rb'))
+
+            # Оновлення бази даних з поточним часом
+            save_to_database(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), rate)
     except sqlite3.Error as e:
         logging.error(f"Помилка при роботі з базою даних: {e}")
     except telebot.apihelper.ApiException as e:
@@ -94,6 +120,7 @@ def send_exchange_rate(bot, chat_id):
         logging.error(f"Сталася помилка: {e}")
     finally:
         conn.close()
+
 
 def schedule_job():
     """
