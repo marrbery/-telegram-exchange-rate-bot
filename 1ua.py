@@ -1,85 +1,117 @@
-import os
-import io
-import datetime
 import requests
 from bs4 import BeautifulSoup
-import openpyxl
-import telebot
+import datetime
+import schedule
 import sqlite3
+import telebot
+import openpyxl
+import logging
 
-# Завантаження налаштувань з змінних оточення
-BOT_TOKEN = os.environ.get('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
-if not BOT_TOKEN:
-    raise ValueError('BOT_TOKEN environment variable not set')
+# Налаштування логування
+logging.basicConfig(filename='bot.log', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
-FINANCE_URL = 'https://www.google.com/finance/quote/USD-UAH'
+# URL для парсингу курсу долара до гривні
+EXCHANGE_RATE_URL = "https://www.google.com/finance/quote/USD-UAH"
 
-# Створення екземпляру бота
-bot = telebot.TeleBot(BOT_TOKEN)
+# Ініціалізація бота
+bot = telebot.TeleBot("ВАШ_ТОКЕН_ТЕЛЕГРАМ_БОТА")
 
-# Підключення до бази даних
-conn = sqlite3.connect('exchange_rates.db')
-c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS exchange_rates
-             (timestamp TEXT, rate REAL)''')
-conn.commit()
-
-# Функція для зберігання курсу валют у базі даних
-def save_exchange_rate(timestamp, rate):
-    c.execute("INSERT INTO exchange_rates VALUES (?, ?)", (timestamp, rate))
-    conn.commit()
-
-# Функція для отримання даних з бази даних
-def get_exchange_rates_from_db(date):
-    c.execute("SELECT timestamp, rate FROM exchange_rates WHERE date(timestamp) = ?", (date,))
-    return c.fetchall()
-
-def get_exchange_rate():
+def parse_exchange_rate():
     """
-    Отримує курс долара США до гривні з веб-сайту Google Finance
-    Зберігає дані у базі даних та повертає рядок з курсом або None у випадку помилки
+    Функція для парсингу курсу долара до гривні.
+    Відправляє запит на сайт, отримує курс та зберігає в базі даних.
     """
     try:
-        response = requests.get(FINANCE_URL)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        rate_element = soup.select_one('div.BNeawe.iBp4i.AP7Wnd > div.YMlKec.fxKbKc')
-        if rate_element:
-            rate = rate_element.text.strip()
-            timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            save_exchange_rate(timestamp, rate)
-            return rate
+        response = requests.get(EXCHANGE_RATE_URL)
+        response.raise_for_status()  # Перевірка на наявність помилок у запиті
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        exchange_rate_element = soup.select_one('div[data-reload-url="/search?q=USD+UAH"]')
+        if exchange_rate_element:
+            exchange_rate = exchange_rate_element.text.strip()
+
+            current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            save_to_database(current_time, exchange_rate)
     except requests.exceptions.RequestException as e:
-        print(f'Помилка отримання курсу валют: {e}')
-    return None
+        logging.error(f"Помилка при отриманні курсу: {e}")
+    except Exception as e:
+        logging.error(f"Сталася помилка: {e}")
 
-@bot.message_handler(commands=['get_exchange_rate'])
-def send_exchange_rate(message):
+def save_to_database(timestamp, rate):
     """
-    Обробник команди /get_exchange_rate у Telegram
-    Отримує курс долара США до гривні та відправляє його у файлі Excel
+    Функція для зберігання даних про курс в базі даних.
     """
-    now = datetime.datetime.now()
-    rate = get_exchange_rate() # Отримання поточного курсу валют
-    if rate:
-        workbook = openpyxl.Workbook()
-        worksheet = workbook.active
-        worksheet['A1'] = 'Час'
-        worksheet['B1'] = 'Курс валют'
-        row = 2
-        # Додавання даних з бази даних до файлу Excel
-        for timestamp, rate in get_exchange_rates_from_db(now.date()):
-            worksheet.cell(row=row, column=1, value=timestamp)
-            worksheet.cell(row=row, column=2, value=rate)
-            row += 1
-        file_bytes = io.BytesIO()
-        workbook.save(file_bytes)
-        file_bytes.seek(0)
-        file_name = f'exchange_rate_{now.date()}.xlsx'
-        bot.send_document(message.chat.id, file_bytes, caption='Курс долара США до гривні', visible_file_name=file_name)
-    else:
-        bot.reply_to(message, 'Не вдалося отримати курс валют')
+    try:
+        conn = sqlite3.connect('exchange_rates.db')
+        cursor = conn.cursor()
 
-if __name__ == '__main__':
-    print('Запуск бота...')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS exchange_rates (
+                            id INTEGER PRIMARY KEY,
+                            timestamp TEXT,
+                            rate TEXT
+                          )''')
+
+        cursor.execute("INSERT INTO exchange_rates (timestamp, rate) VALUES (?, ?)", (timestamp, rate))
+        
+        conn.commit()
+        conn.close()
+    except sqlite3.Error as e:
+        logging.error(f"Помилка при роботі з базою даних: {e}")
+    except Exception as e:
+        logging.error(f"Сталася помилка: {e}")
+
+def send_exchange_rate(bot, chat_id):
+    """
+    Функція для відправлення курсу користувачеві у форматі XLSX.
+    """
+    try:
+        conn = sqlite3.connect('exchange_rates.db')
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT timestamp, rate FROM exchange_rates ORDER BY timestamp DESC LIMIT 1")
+        row = cursor.fetchone()
+
+        if row:
+            timestamp, rate = row
+
+            workbook = openpyxl.Workbook()
+            worksheet = workbook.active
+            worksheet['A1'] = 'Час'
+            worksheet['B1'] = 'Курс'
+            worksheet.append([timestamp, rate])
+
+            file_path = f'exchange_rate_{timestamp}.xlsx'
+            workbook.save(file_path)
+
+            bot.send_document(chat_id, open(file_path, 'rb'))
+    except sqlite3.Error as e:
+        logging.error(f"Помилка при роботі з базою даних: {e}")
+    except telebot.apihelper.ApiException as e:
+        logging.error(f"Помилка при відправленні курсу: {e}")
+    except Exception as e:
+        logging.error(f"Сталася помилка: {e}")
+    finally:
+        conn.close()
+
+def schedule_job():
+    """
+    Функція для обмеження регулярного оновлення курсу.
+    """
+    schedule.every().hour.do(parse_exchange_rate)
+
+def start_telegram_bot():
+    """
+    Функція для запуску Telegram-бота.
+    """
+    @bot.message_handler(commands=['get_exchange_rate'])
+    def handle_get_exchange_rate(message):
+        send_exchange_rate(bot, message.chat.id)
+
     bot.polling()
+
+if __name__ == "__main__":
+    schedule_job()
+    start_telegram_bot()
+
